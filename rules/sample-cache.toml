@@ -1,0 +1,25 @@
+schema_version = 1
+id = "sample-cache"
+name = "Sample Cache Cleanup"
+category = "Cache"
+risk = "Low"
+enabled = true
+
+[match]
+mode = "Paths"
+paths = ["~/.cache/sample-app"]
+strategy = "Recursive"
+command = []
+parser = ""
+
+[action]
+action_type = "TrashPaths"
+paths = ["~/.cache/sample-app"]
+command = []
+mode = "Confirm"
+timeout_sec = 30
+allow_globs = false
+max_items = 1000
+package_manager = ""
+project_types = []
+params = {}

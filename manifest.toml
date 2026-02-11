@@ -1,0 +1,22 @@
+schema_version = 1
+pack_id = "{{PACK_ID}}"
+name = "{{PACK_NAME}}"
+version = "{{PACK_VERSION}}"
+description = "{{PACK_DESCRIPTION}}"
+author = "{{AUTHOR}}"
+license = "MIT"
+homepage = "{{HOMEPAGE}}"
+core_compat = ">=0.1.0,<2.0.0"
+action_api = 1
+os_targets = ["{{OS_TARGET}}"]
+capabilities = ["FsRead", "FsTrash"]
+
+[signing]
+sigstore = true
+issuer = "https://token.actions.githubusercontent.com"
+identity = "{{SIGNING_IDENTITY}}"
+
+[[rules]]
+id = "sample-cache"
+name = "Sample Cache Cleanup"
+rule_file = "rules/sample-cache.toml"

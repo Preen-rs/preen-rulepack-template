@@ -1,0 +1,122 @@
+name: Release Rulepack
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version without v prefix (x.x.x)"
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: sigstore/cosign-installer@v3
+      - name: Validate version format
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "invalid version: $VERSION"
+            exit 1
+          fi
+      - name: Ensure tag does not exist
+        run: |
+          TAG="v$VERSION"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "tag already exists locally: $TAG"
+            exit 1
+          fi
+          if git ls-remote --tags origin "refs/tags/$TAG" | grep -q "$TAG"; then
+            echo "tag already exists on origin: $TAG"
+            exit 1
+          fi
+      - name: Update manifest version and signing identity
+        run: |
+          python3 - <<'PY'
+          import os
+          import pathlib
+          import tomllib
+
+          manifest_path = pathlib.Path("manifest.toml")
+          data = tomllib.loads(manifest_path.read_text(encoding="utf-8"))
+          signing = data.get("signing")
+          if not isinstance(signing, dict):
+              raise SystemExit("manifest missing [signing] table")
+          repo = os.environ["GITHUB_REPOSITORY"]
+          signing["identity"] = (
+              f"https://github.com/{repo}"
+              "/.github/workflows/release-manual.yml@refs/heads/main"
+          )
+          data["version"] = os.environ["VERSION"]
+          lines = manifest_path.read_text(encoding="utf-8").splitlines()
+          out = []
+          in_signing = False
+          for line in lines:
+              if line.startswith("version = "):
+                  out.append(f'version = "{data["version"]}"')
+                  continue
+              if line.strip() == "[signing]":
+                  in_signing = True
+                  out.append(line)
+                  continue
+              if in_signing and line.startswith("[") and line.strip() != "[signing]":
+                  in_signing = False
+              if in_signing and line.strip().startswith("identity = "):
+                  out.append(f'identity = "{signing["identity"]}"')
+                  continue
+              out.append(line)
+          manifest_path.write_text("\n".join(out) + "\n", encoding="utf-8")
+          PY
+      - name: Generate manifest signature artifacts
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign sign-blob \
+            --yes \
+            --output-signature manifest.sig \
+            --output-certificate manifest.cert \
+            manifest.toml
+      - name: Validate pack files
+        run: python3 scripts/validate_pack.py
+      - name: Commit release state
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add manifest.toml manifest.sig manifest.cert
+          git commit -m "chore: release rulepack v$VERSION"
+          git push origin HEAD:main
+      - name: Create and push tag
+        run: |
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
+      - name: Sign manifest in CI (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: "1"
+        run: |
+          cosign sign-blob \
+            --yes \
+            --output-signature manifest.ci.sig \
+            --output-certificate manifest.ci.pem \
+            manifest.toml
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ inputs.version }}
+          generate_release_notes: true
+          files: |
+            manifest.toml
+            manifest.sig
+            manifest.cert
+            manifest.ci.sig
+            manifest.ci.pem
