@@ -52,6 +52,8 @@ The manual release workflow enforces:
 4. Use `Release Rulepack` for every release.
 5. Verify preflight/test/install against the newly created tag.
 
+See `CONTRIBUTING.md` for the full authoring and release policy.
+
 ## Required files
 
 - `manifest.toml`
