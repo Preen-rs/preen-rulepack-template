@@ -10,8 +10,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6
         with:
           python-version: "3.11"
+      - name: Detect bootstrap mode (no release tag yet)
+        id: bootstrap
+        run: |
+          if [ -z "$(git tag -l 'v*')" ]; then
+            echo "allow_placeholder=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "allow_placeholder=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Validate pack files
-        run: python3 scripts/validate_pack.py
+        run: |
+          if [ "${{ steps.bootstrap.outputs.allow_placeholder }}" = "true" ]; then
+            python3 scripts/validate_pack.py --allow-placeholder-signatures
+          else
+            python3 scripts/validate_pack.py
+          fi

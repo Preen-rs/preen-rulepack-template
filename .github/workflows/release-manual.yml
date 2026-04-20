@@ -8,6 +8,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -78,6 +82,8 @@ jobs:
               out.append(line)
           manifest_path.write_text("\n".join(out) + "\n", encoding="utf-8")
           PY
+      - name: Validate pack files before signing
+        run: python3 scripts/validate_pack.py
       - name: Generate manifest signature artifacts
         env:
           COSIGN_EXPERIMENTAL: "1"
@@ -87,7 +93,15 @@ jobs:
             --output-signature manifest.sig \
             --output-certificate manifest.cert \
             manifest.toml
-      - name: Validate pack files
+      - name: Verify generated manifest signature
+        run: |
+          cosign verify-blob \
+            --signature manifest.sig \
+            --certificate manifest.cert \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release-manual.yml@refs/heads/main" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            manifest.toml
+      - name: Validate pack files after signing
         run: python3 scripts/validate_pack.py
       - name: Commit release state
         run: |

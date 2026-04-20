@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import pathlib
 import sys
+import argparse
 import tomllib
 
 
@@ -30,6 +31,14 @@ def non_empty_string(data: dict, key: str, path: pathlib.Path) -> str:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--allow-placeholder-signatures",
+        action="store_true",
+        help="Allow placeholder signature/certificate during bootstrap validation",
+    )
+    args = parser.parse_args()
+
     manifest_path = ROOT / "manifest.toml"
     signature_path = ROOT / "manifest.sig"
     certificate_path = ROOT / "manifest.cert"
@@ -78,10 +87,20 @@ def main() -> None:
             fail(f"{rule_file}: missing [action] table")
 
     sig_content = signature_path.read_text(encoding="utf-8").strip()
-    if not sig_content or sig_content == "REPLACE_WITH_SIGSTORE_SIGNATURE":
+    if not sig_content:
+        fail("manifest.sig is empty")
+    if (
+        sig_content == "REPLACE_WITH_SIGSTORE_SIGNATURE"
+        and not args.allow_placeholder_signatures
+    ):
         fail("manifest.sig is placeholder; replace with a real Sigstore signature")
     cert_content = certificate_path.read_text(encoding="utf-8").strip()
-    if not cert_content or cert_content == "REPLACE_WITH_SIGSTORE_CERTIFICATE":
+    if not cert_content:
+        fail("manifest.cert is empty")
+    if (
+        cert_content == "REPLACE_WITH_SIGSTORE_CERTIFICATE"
+        and not args.allow_placeholder_signatures
+    ):
         fail("manifest.cert is placeholder; replace with a real Sigstore certificate")
 
     print("rulepack validation passed")
